@@ -413,7 +413,7 @@ int read_amide_map( char* fnm, t_amide_map *p_map, int verbose ) {
 					}
 				}
 				if(verbose){
-					 printf("Number of sites: %d\n", map.nsites);
+					printf("Number of sites: %d\n", map.nsites);
 					for(i=0; i<map.nsites; i++) {
 						printf("\tSite %d: ", i);
 						for(j=0; j<map.MapSites[i].natoms; j++) {

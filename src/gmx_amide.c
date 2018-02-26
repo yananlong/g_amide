@@ -22,7 +22,7 @@
 #include "index.h"
 #include "smalloc.h"
 #include "vec.h"
-#include "xvgr.h"
+#include "xvgr.h"f
 #include "gstat.h"
 #include "string2.h"
 #include "pbc.h"
@@ -182,6 +182,7 @@ int find_excluded_atoms( t_pbc pbc, t_topology top, rvec *x, t_amide_map map, t_
 	return 1;
 }
 
+/* This function is identical to find_excluded_atoms
 // Identify Coupling sites for each amide bond
 int find_coupling_sites( t_pbc pbc, t_topology top, rvec *x, t_amide_map map, t_protbond *p_pb, int bonds) {
 	int b,i,at,at0;
@@ -241,15 +242,26 @@ int find_coupling_sites( t_pbc pbc, t_topology top, rvec *x, t_amide_map map, t_
 	}
 	return 1;
 }
-
+*/
 
 /********************************************************************************
 * 				Memory Allocation				*
 ********************************************************************************/
 
 int set_arrays(real ****p_elecData, real ****p_ProElecData, int nelec, real ***p_angleData, real ***p_ProAngleData, int nangles, real ***p_freqData, real ***p_ProFreqData, int nfreq, real ****p_coupData, int ncoup, rvec ***p_coordData, rvec ***p_ProCoordData, rvec **p_dipData, rvec **p_centData, matrix **p_RotMat, matrix **p_ProRotMat, int bonds, int nsites, int nPro, int nProSites) {
+	/* Used enum to handle the different types of errors
+	 *
+	 */
+
 	int error = 0;
-	int i,ix; 
+	int i,ix;
+
+	typedef enum {
+		e_coordData = 1, e_dipData, e_centData, e_RotMat,
+		e_elecData, e_angleData, e_freqData, e_coupData,
+		e_ProElecData, e_ProAngleData, e_ProFreqData,
+		e_ProCoordData, e_ProCoordData_i, e_ProRotMat
+	} errors;
 
 	*p_coordData = (rvec**) malloc(bonds*sizeof(rvec*));
 	if(*p_coordData==NULL) error = 1;
@@ -257,7 +269,7 @@ int set_arrays(real ****p_elecData, real ****p_ProElecData, int nelec, real ***p
 		for(i=0; i<bonds; i++) {
 			*(*p_coordData+i) = (rvec*) malloc(nsites*sizeof(rvec));
 			if(*(*p_coordData+i)==NULL) { 
-				error = 1;
+				error = e_coordData;
 				break;
 			}
 		}
@@ -273,59 +285,59 @@ int set_arrays(real ****p_elecData, real ****p_ProElecData, int nelec, real ***p
 	if(!error) {
 		*p_dipData = (rvec*) malloc(bonds*sizeof(rvec));
 		if(*p_dipData==NULL) {
-			error = 2;
+			error = e_dipData;
 			printf("Error allocating memory for Dipole moment data.\n");
 		}
 	}
 	if(!error) {
 		*p_centData = (rvec*) malloc(bonds*sizeof(rvec));
 		if(*p_centData==NULL) {
-			error = 3;
+			error = e_centData;
 			printf("Error allocating memory for bond Center data.\n");
 		}
 	}
 	if(!error) {
 		*p_RotMat = (matrix*) malloc(bonds*sizeof(matrix));
 		if(*p_RotMat==NULL) {
-			error = 4;
+			error = e_RotMat;
 			printf("Error allocating memory for Rotation Matrix data.\n");
 		}
 	}
 	if(!error) {
 		if(!allocate_3d_array_real(p_elecData, bonds, nsites, nelec)) {
 			printf("Error allocating Electrostatic variable array\n");
-			error = 5;
+			error = e_elecData;
 		} else if(!allocate_2d_array_real(p_angleData, bonds, nangles)) {
 			printf("Error allocating Angles variable array\n");
-			error = 6;
+			error = e_angleData;
 		} else if(!allocate_2d_array_real(p_freqData, bonds, nfreq)) {
 			printf("Error allocating Frequency variable array\n");
-			error = 7;
+			error = e_freqData;
 		} else if(!allocate_3d_array_real(p_coupData, bonds, bonds, ncoup)) {
 			printf("Error allocating Coupling variable array\n");
-			error = 8;
+			error = e_coupData;
 		}
 	}
 	if(!error) {
 		if(nProSites!=0) {
 			if(!allocate_3d_array_real(p_ProElecData, nPro, nProSites, nelec)) {
 				printf("Error allocating Proline Electrostatic variable array\n");
-				error = 9;
+				error = e_ProElecData;
 			} else if(!allocate_2d_array_real(p_ProAngleData, nPro, nangles)) {
 				printf("Error allocating Proline Angles variable array\n");
-				error = 10;
+				error = e_ProAngleData;
 			} else if(!allocate_2d_array_real(p_ProFreqData, nPro, nfreq)) {
 				printf("Error allocating Proline Frequency variable array\n");
-				error = 11;
+				error = e_ProFreqData;
 			}
 		} 
 		*p_ProCoordData = (rvec**) malloc(nPro*sizeof(rvec*));
-		if(*p_ProCoordData==NULL) error = 12;
+		if(*p_ProCoordData==NULL) error = e_ProCoordData;
 		else {
 			for(i=0; i<nPro; i++) {
 				*(*p_ProCoordData+i) = (rvec*) malloc(nProSites*sizeof(rvec));
 				if(*(*p_ProCoordData+i)==NULL) { 
-					error = 13;
+					error = e_ProCoordData_i;
 					break;
 				}
 			}
@@ -340,38 +352,42 @@ int set_arrays(real ****p_elecData, real ****p_ProElecData, int nelec, real ***p
 		if(!error) {
 			*p_ProRotMat = (matrix*) malloc(nPro*sizeof(matrix));
 			if(*p_ProRotMat==NULL) {
-				error = 14;
+				error = e_ProRotMat;
 				printf("Error allocating memory for Proline Rotation Matrix data.\n");
 			}
 		}
 	}
 
-	if(!error) return 1;
+	if (!error)
+		return 1;
 	else {
-		if(error>1) {
-			for(i=0; i<bonds; i++) free(*(*p_coordData+i));
+		if (error > e_coordData) {
+			for (i = 0; i < bonds; i++)
+				free(*(*p_coordData + i));
 			free(*p_coordData);
 		}
-		if(error>2) free(*p_dipData);
-		if(error>3) free(*p_centData);
-		if(error>4) free(*p_RotMat);
-		if(error>5) free_3d_array_real(*p_elecData, bonds, nsites, nelec);
-		if(error>6) free_2d_array_real(*p_angleData, bonds, nangles);
-		if(error>7) free_2d_array_real(*p_freqData, bonds, nfreq);
-		if(error>8) free_3d_array_real(*p_coupData, bonds, bonds, nfreq);
-		if(error>9) free_3d_array_real(*p_ProElecData, nPro, nProSites, nelec);
-		if(error>10) free_2d_array_real(*p_ProAngleData, nPro, nangles);
-		if(error>11) free_2d_array_real(*p_ProFreqData, nPro, nfreq);
-		if(error>12) {
-			for(i=0; i<nPro; i++) free(*(*p_ProCoordData+i));
+		if(error>e_dipData) free(*p_dipData);
+		if(error>e_centData) free(*p_centData);
+		if(error>e_RotMat) free(*p_RotMat);
+		if(error>e_elecData) free_3d_array_real(*p_elecData, bonds, nsites, nelec);
+		if(error>e_angleData) free_2d_array_real(*p_angleData, bonds, nangles);
+		if(error>e_freqData) free_2d_array_real(*p_freqData, bonds, nfreq);
+		if(error>e_coupData) free_3d_array_real(*p_coupData, bonds, bonds, nfreq);
+		if(error>e_ProElecData) free_3d_array_real(*p_ProElecData, nPro, nProSites, nelec);
+		if(error>e_ProAngleData) free_2d_array_real(*p_ProAngleData, nPro, nangles);
+		if(error>e_ProFreqData) free_2d_array_real(*p_ProFreqData, nPro, nfreq);
+		if(error>e_ProCoordData) {
+			for(i=0; i<nPro; i++)
+				free(*(*p_ProCoordData+i));
 			free(*p_ProCoordData);
 		}
-		if(error>13) free(*p_ProRotMat);
+		if(error>e_ProCoordData_i) free(*p_ProRotMat);
 		return 0;
 	}
 }
 
 int unset_arrays(real ***elecData, real ***ProElecData, int nelec, real **angleData, real **ProAngleData, int nangles, real **freqData, real **ProFreqData, int nfreq, real ***coupData, int ncoup, rvec **coordData, rvec **ProCoordData, rvec *dipData, rvec *centData, matrix *RotMat, matrix *ProRotMat, int bonds, int nsites, int nPro, int nProSites) {
+
 	int i;
 	free_3d_array_real(elecData, bonds, nsites, nelec);
 	free_2d_array_real(angleData, bonds, nangles);
@@ -478,6 +494,7 @@ int get_coordinates(t_pbc pbc, t_topology top, rvec *x, t_amide_map map, t_protb
 				svmul((1.0)/map.MapSites[i].natoms, dx, dx);
 				rvec_inc(coordData[b][i], dx);
 			}
+			/*
 			// Incorrect PBC treatment at boundaries. Replaced 08/25/2014 by MER. 
 			//clear_rvec(coordData[b][i]);
 			//for(j=0; j<map.MapSites[i].natoms; j++) rvec_inc(coordData[b][i], x[p_pb[b].MapAtoms[i][j]]); 
@@ -490,7 +507,7 @@ int get_coordinates(t_pbc pbc, t_topology top, rvec *x, t_amide_map map, t_protb
 			//svmul((1.0)/map.MapSites[i].natoms, x0, x0);
 			//rvec_sub(x0, coordData[b][i], dx);
 			//printf("PBC - NoPBC: (%6.10f, %6.10f, %6.10f)\n", dx[0], dx[1], dx[2]);
-
+			*/
 		}
 
 	}
@@ -592,6 +609,59 @@ int get_electrostatics(t_pbc pbc, t_topology top, rvec *x, t_amide_map map, t_pr
 	return 1;
 }
 
+/* ylong 29/01/2018
+ * Added function to read a series of electrostatic files
+ * that were named in accordance with the map,
+ * and write to the 3D matrix elecData
+ * which is eventually passed to other functions that use it
+ */
+int get_elec_from_files(FILE **elecfp[10], real ***elecData, t_amide_map map,
+						int nbonds, const int nelec, const int maxline) { // nelec = 10
+	// Initialize array
+	for (int b = 0; b < nbonds; b++) {
+		for (int e = 0; e < nelec; e++) {
+				for (int s = 0; s < map.nsites; s++) {
+					elecData[b][s][e] = 0.0;
+			}
+		}
+	}
+	/* Another way to intialize
+	int size = nbonds * nelec * map.nsites;
+	for (int el = 0; el < size; el++)
+		*(elecData + el) = 0.0;
+	*/
+    char line[maxline];
+	char *token = malloc(maxline * sizeof(char));
+	/* ylong 20/02/2018
+	 * Changed token processing code
+	 */
+	char *delim = "\t\n";
+    for (int s = 0; s < map.nsites; s++) {
+        for (int e = 0; e < nelec; e++) {
+        	if (map.elec_used[e]) {
+				if (fgets(line, maxline, elecfp[e][s]) == NULL) { // Read the line
+					printf("Error reading line from external electrostatic file\n");
+					return 1;
+				}
+				else {
+					token = strtok(line, delim); // initial call
+					for (int b = 0; b < nbonds; b++) {
+						if (token) {
+							elecData[b][s][e] = strtod(token, NULL); // convert to double
+							// printf("elecData[%d][%d][%d] = %6.10lf\n", b, s, e, elecData[b][s][e]);
+							token = strtok(NULL, delim); // Subsequent calls
+						} else { // End of string
+							break;
+						}
+					}
+				}
+        	}
+        }
+    }
+    free(token);
+
+	return 0;
+}
 
 int get_freq(t_amide_map map, t_protbond *p_pb, int bonds, real ***elecData, int nelec, real **angleData, int nangles, real **freqData, int nfreq) {
 	int b,i,j;
@@ -603,15 +673,16 @@ int get_freq(t_amide_map map, t_protbond *p_pb, int bonds, real ***elecData, int
 		if(map.dimNNFSC[0]*map.dimNNFSC[1]>0) wnn += get_NN_val(angleData[b][2], angleData[b][3], map.NNFSC, map.dimNNFSC[0], map.dimNNFSC[1]);
 		for(i=0; i<map.nsites; i++) {
 			for(j=0; j<nelec; j++) {
-				if(map.elec_used[j]) wel += elecData[b][i][j]*map.MapSites[i].shift[j];
+				if(map.elec_used[j])
+					wel += elecData[b][i][j]*map.MapSites[i].shift[j]; // site info
 			}
 		}
 		freqData[b][0] = wel + wnn + map.freq;
 		if(p_pb[b].isPro) { 
 			freqData[b][0] += map.proshift;
 		}
-		freqData[b][1] = wel;
-		freqData[b][2] = wnn;
+		freqData[b][1] = wel; // used for proline shift only
+		freqData[b][2] = wnn; // never used
 		//printf("Bond %d: %6.10f\n", b, elecData[b][0][1]);
 		//for(i=0; i<3; i++) if(b==2) printf("%6.10f\n", elecData[b][0][i+1]);
 	}
@@ -1332,15 +1403,17 @@ int open_spec_files(FILE **p_fp, int nfiles, char* namebase, const int maxchar) 
 
 int write_spec_data(FILE **p_fp, real ***coupData, real **freqData, rvec *dipData, int bonds) {
 	int b1,b2;
-	for(b1=0; b1<bonds; b1++) {
-		fprintf(p_fp[0], "%10.6f\t", freqData[b1][0]);
-		for(b2=0; b2<bonds; b2++) {
-			if(b1==b2) fprintf(p_fp[1], "%10.6f\t", freqData[b1][0]);
-			else fprintf(p_fp[1], "%10.6f\t", coupData[b1][b2][0]);
+	for (b1 = 0; b1 < bonds; b1++) {
+		fprintf(p_fp[0], "%10.6f\t", freqData[b1][0]); // site info
+		for (b2 = 0; b2 < bonds; b2++) {
+			if (b1 == b2)
+				fprintf(p_fp[1], "%10.6f\t", freqData[b1][0]); // Hamiltonian (diagnol)
+			else
+				fprintf(p_fp[1], "%10.6f\t", coupData[b1][b2][0]); // Hamiltonian (off-diagonal)
 		}
-		fprintf(p_fp[2], "%10.6f\t", dipData[b1][0]);
-		fprintf(p_fp[3], "%10.6f\t", dipData[b1][1]);
-		fprintf(p_fp[4], "%10.6f\t", dipData[b1][2]);
+		fprintf(p_fp[2], "%10.6f\t", dipData[b1][0]); // DipX
+		fprintf(p_fp[3], "%10.6f\t", dipData[b1][1]); // DipY
+		fprintf(p_fp[4], "%10.6f\t", dipData[b1][2]); // DipZ
 	}
 	fprintf(p_fp[0], "\n");
 	fprintf(p_fp[1], "\n");
@@ -1356,7 +1429,11 @@ int close_spec_files(FILE **p_fp, int nfiles) {
 	return 1;
 }
 
-int open_elec_files(FILE **elecfp[10], char *outname, t_amide_map map, const int maxchar) {
+/* ylong 29/01/2018
+ * Changed name of the function
+ * from open_elec_files to open_elec_output_files
+ */
+int open_elec_output_files(FILE **elecfp[10], char *outname, t_amide_map map, const int maxchar) {
 	int i,j,k,l;
 	char fname[maxchar];
 	char COMP[10][6] = { "P", "Ex", "Ey", "Ez", "Gxx", "Gxy", "Gxz", "Gyy", "Gyz", "Gzz" };
@@ -1364,7 +1441,7 @@ int open_elec_files(FILE **elecfp[10], char *outname, t_amide_map map, const int
 		if(map.elec_used[j]) {
 			elecfp[j] = (FILE**) malloc(map.nsites*sizeof(FILE*));
 			if(elecfp[j]==NULL) {
-				printf("Error opening electrostatic output files. Please check input.\n");
+				printf("Error opening electrostatic output files. Please check your input.\n");
 				int jx;
 				for(jx=0; jx<j; jx++) free(elecfp[j]);
 				return 0;
@@ -1390,7 +1467,65 @@ int open_elec_files(FILE **elecfp[10], char *outname, t_amide_map map, const int
 				strcat(fname, ".txt");
 				elecfp[j][i] = fopen(fname, "w");
 				if(elecfp[j][i]==NULL) {
-					printf("Error opening electrostatic output files. Please check input.\n");
+					printf("Error opening electrostatic output files. Please check your input.\n");
+					int ix, jx;
+					for(ix=0; ix<i; ix++) fclose(elecfp[j][ix]);
+					free(elecfp[j]);
+					for(jx=0; jx<j; jx++) {
+						for(ix=0; ix<map.nsites; ix++) fclose(elecfp[jx][ix]);
+						free(elecfp[jx]);
+					}
+					return 0;
+				}
+			}
+		}
+	}
+	return 1;
+}
+
+/* ylong 29/01/2018
+ * Added the function that look for file(s) specified by inname and the map
+ * which contain(s) electrostatic information (e.g. potential, field)
+ * from external sources (e.g. CHARMM/NAMD).
+ * It is identical to open_elec_output_files
+ * except that outname is replaced by inname and the mode of fopen
+ * is "r" (read) instead of "w" write
+ */
+int open_elec_input_files(FILE **elecfp[10], char *inname, t_amide_map map, const int maxchar) {
+	int i,j,k,l;
+	char fname[maxchar];
+	char COMP[10][6] = { "P", "Ex", "Ey", "Ez", "Gxx", "Gxy", "Gxz", "Gyy", "Gyz", "Gzz" };
+	for(j=0; j<10; j++) {
+		if(map.elec_used[j]) {
+			elecfp[j] = (FILE**) malloc(map.nsites*sizeof(FILE*));
+			if(elecfp[j]==NULL) {
+				printf("Error opening electrostatic input files. Please check your input.\n");
+				int jx;
+				for(jx=0; jx<j; jx++) free(elecfp[j]);
+				return 0;
+			}
+		} else elecfp[j] = NULL;
+	}
+	for(j=0; j<10; j++) {
+		for(i=0; i<map.nsites; i++) {
+			if(map.elec_used[j]) {
+				fname[0] = '\0';
+				if( (inname!=NULL) && (strlen(inname)>0) ) {
+					strcpy(fname, inname);
+					if(inname[strlen(inname)-1]!='/') strcat(fname, "_");
+				}
+				strcat(fname, COMP[j]);
+				for(k=0; k<map.MapSites[i].natoms; k++) {
+					if(k>0) strcat(fname, "_AND");
+					for(l=0; l<map.MapSites[i].AtomPaths[k].length; l++) {
+						strcat(fname, "_");
+						strcat(fname, map.MapSites[i].AtomPaths[k].Path[l]);
+					}
+				}
+				strcat(fname, ".txt");
+				elecfp[j][i] = fopen(fname, "r");
+				if(elecfp[j][i]==NULL) {
+					printf("Error opening electrostatic input files. Please check input.\n");
 					int ix, jx;
 					for(ix=0; ix<i; ix++) fclose(elecfp[j][ix]);
 					free(elecfp[j]);
@@ -1485,11 +1620,20 @@ int main ( int argc, char * argv[] ) {
 	char* mapfile = NULL;
 	char* promapfile = NULL;
 	char* chargefile = NULL;
-	char* outname = NULL;
+	/* ylong 29/01/2018
+	 * Change initial value of outname to "" from NULL
+	 */
+	char* outname = "";
 	// cjfeng 08/27/2016
 	// Added chunk command to selectively choose portion of bath
 	// to include in electrostatics.
 	char* chunkstr = "";
+	/* ylong 29/01/2018
+	 * Added the option inname to use external sources of
+	 * electrostatic information from e.g. CHARMM for
+	 * systems run with the Drude polarizable force field
+	 */
+	char* inname = "";
 	int nthreads = 1;
 	int print_elec = 0;
 	int print_angles = 0;
@@ -1523,14 +1667,15 @@ int main ( int argc, char * argv[] ) {
 		{"-print_angles", FALSE, etBOOL, {&print_angles},
 		"Print dihedral angles"},
 		{"-cutoff", FALSE, etREAL, {&cutoff}, 
-		 "Cutoff distance (nm)"}, 
+		 "Cutoff distance (nm) used in electrostatic calculations"},
 		{"-osc", FALSE, etREAL, {&osc}, 
 		"Oscillator strength (Debye^2). If positive, used to normalize dipole moments."},
 		{"-verbose", FALSE, etBOOL, {&verbose}, 
 		"Verbose (print lots of info)"},
 		{"-chunk", FALSE, etSTR, {&chunkstr},
-		 "Chunk range for selecting part of the system to be included for electrostatic frequency shift, format: [a-b;...;c-d]. Indexing begins at zero."}
-		};	
+		 "Chunk range for selecting part of the system to be included for electrostatic frequency shift, format: [a-b;...;c-d]. Indexing begins at zero."},
+		{"-inname", FALSE, etSTR, {&inname}, "Input name base for external electrostatic files. Make sure it is not the same as outname (see above)."}
+	};
 
 	// The program description
 	const char *desc[] = {""};
@@ -1671,7 +1816,7 @@ int main ( int argc, char * argv[] ) {
 		int j;
 		ffcharge = 1;
 		int nchars = 20;
-		nrep = 8;
+		nrep = 7;
 		nres = 0;
 		resarray = NULL; 
 		reparray[0] = NULL;
@@ -1828,6 +1973,7 @@ int main ( int argc, char * argv[] ) {
 	int arraysset = 0; 
 	int specfilesopen = 0;
 	int elecfilesopen = 0;
+	int externalelecfiles = 0;
 	int anglefilesopen = 0;
 	real ***elecData;
 	real ***ProElecData;
@@ -1849,9 +1995,11 @@ int main ( int argc, char * argv[] ) {
 	if(!set_arrays(&elecData, &ProElecData, nelec, &angleData, &ProAngleData, nangles, &freqData, &ProFreqData, nfreq, &coupData, ncoup, &coordData, &ProCoordData, &dipData, &centData, &RotMat, &ProRotMat, bonds, map.nsites, nPro, promap.nsites)) {
 		printf("Error allocating memory for data arrays\n");
 		error = 1;
-	} else arraysset = 1;
+	} else
+		arraysset = 1;
 
 	const int maxchar = 1024;
+	const int maxline = 16384;
 	FILE *infofp = NULL;
 	int infofileopen = 0;
 	if(!open_info_file(&infofp,outname,maxchar)) error = 1;
@@ -1861,8 +2009,34 @@ int main ( int argc, char * argv[] ) {
 	else specfilesopen = 1;
 	
 	FILE **elecfp[10];
-	if( (print_elec) && (!open_elec_files(elecfp, outname, map, maxchar))) error = 1;
-	else if(print_elec) elecfilesopen = 1;
+	FILE **elecfp_in[10];
+	if (print_elec && (!open_elec_output_files(elecfp, outname, map, maxchar))) {
+		error = 1;
+	} else if (print_elec) {
+		elecfilesopen = 1;
+	}
+	/* ylong 29/01/2018
+	 * Determine whether to use the MD trajectory and the topology
+	 * or external sources to obtain electrostatic information
+	 * If outname and inname are the same, the electrostatic files will conflict.
+	 * In this case, to be safe we will just throw an error
+	 */
+	if (inname) { // strcmp trigger segmentation fault with null pointers
+		if (strcmp(inname, "") != 0) { // Using external source
+			if(outname) { // strcmp trigger segmentation fault with null pointers
+				if (strcmp(outname, inname) == 0) {
+					printf("Error: outname and inname are the same");
+					error = 1;
+				} else {
+					if (!open_elec_input_files(elecfp_in, inname, map, maxchar)) {
+						error = 1;
+					} else {
+						externalelecfiles = 1;
+					}
+				}
+			}
+		}
+	}
 	
 	FILE *anglefp[4];
 	if( (print_angles) && (!open_angle_files(anglefp, outname, maxchar))) error = 1;
@@ -1879,6 +2053,7 @@ int main ( int argc, char * argv[] ) {
 	if(error) {
 		if(anglefilesopen==1) close_angle_files(anglefp);
 		if(elecfilesopen==1) close_elec_files(elecfp, map);
+		if(externalelecfiles==1) close_elec_files(elecfp_in, map);
 		if(infofileopen==1) fclose(infofp);
 		if(specfilesopen==1) close_spec_files(specfp, 5);
 		if(arraysset==1) unset_arrays(elecData, ProElecData, nelec, angleData, ProAngleData, nangles, freqData, ProFreqData, nfreq, coupData, ncoup, coordData, ProCoordData, dipData, centData, RotMat, ProRotMat, bonds, map.nsites, nPro, promap.nsites);
@@ -1902,12 +2077,23 @@ int main ( int argc, char * argv[] ) {
 		// Read coordinates for all amide bonds and set molecular frame axes/rotation matrix. 
 		get_coordinates(pbc, top, x, map, p_pb, bonds, RotMat, coordData);
 		if(promap.nsites!=0) get_coordinates(pbc, top, x, promap, p_ppb, nPro, ProRotMat, ProCoordData);
-		// Calculate electrostatic values around each bond. 
-		get_electrostatics(pbc, top, x, map, p_pb, RotMat, bonds, coordData, elecData, nelec, nthreads, cutoff, nchunks, START, STOP);
-		if(promap.nsites!=0) get_electrostatics(pbc, top, x, promap, p_ppb, ProRotMat, nPro, ProCoordData, ProElecData, nelec, nthreads, cutoff, nchunks, START, STOP);
+
+		// Calculate electrostatics
+		if (externalelecfiles == 0) { // Not using external source of electrostatic information; obtain it from trajectory and topology
+			get_electrostatics(pbc, top, x, map, p_pb, RotMat, bonds, coordData, elecData,
+							   nelec, nthreads, cutoff, nchunks, START, STOP);
+			if(promap.nsites!=0) {
+				get_electrostatics(pbc, top, x, promap, p_ppb, ProRotMat, nPro, ProCoordData, ProElecData,
+								   nelec, nthreads, cutoff, nchunks, START, STOP);
+			}
+		} else if (externalelecfiles == 1) { // Using external source of electrostatic information
+			get_elec_from_files(elecfp_in, elecData, map, bonds, nelec, maxline);
+		}
+
 		// Calculate dihedral angles for each bond. 
 		get_angles(&pbc, top, x, map, p_pb, bonds, angleData, nangles);
 		if(promap.nsites!=0) get_angles(&pbc, top, x, promap, p_ppb, nPro, ProAngleData, nangles);
+
 		// Calculate frequencies. 
 		get_freq(map, p_pb, bonds, elecData, nelec, angleData, nangles, freqData, nfreq);
 		if(promap.nsites!=0) get_freq(promap, p_ppb, nPro, ProElecData, nelec, ProAngleData, nangles, ProFreqData, nfreq);
@@ -1971,11 +2157,18 @@ int main ( int argc, char * argv[] ) {
 		set_pbc(&pbc, ePBC, box); // Re-set pbc using new box
 	} while(trrStatus);
 
-	if(anglefilesopen==1) close_angle_files(anglefp);
-	if(elecfilesopen==1) close_elec_files(elecfp, map);
-	if(infofileopen==1) fclose(infofp);
-	if(specfilesopen==1) close_spec_files(specfp, 5);
-	if(arraysset==1) unset_arrays(elecData, ProElecData, nelec, angleData, ProAngleData, nangles, freqData, ProFreqData, nfreq, coupData, ncoup, coordData, ProCoordData, dipData, centData, RotMat, ProRotMat, bonds, map.nsites, nPro, promap.nsites);
+	if (anglefilesopen == 1)
+		close_angle_files(anglefp);
+	if (elecfilesopen == 1)
+		close_elec_files(elecfp, map);
+	if (externalelecfiles == 1)
+		close_elec_files(elecfp_in, map);
+	if (infofileopen == 1)
+		fclose(infofp);
+	if (specfilesopen == 1)
+		close_spec_files(specfp, 5);
+	if (arraysset == 1)
+		unset_arrays(elecData, ProElecData, nelec, angleData, ProAngleData, nangles, freqData, ProFreqData, nfreq, coupData, ncoup, coordData, ProCoordData, dipData, centData, RotMat, ProRotMat, bonds, map.nsites, nPro, promap.nsites);
 	if(reparray[0]!=NULL) for(i=0; i<nrep; i++) if(reparray[0][i]!=NULL) free(reparray[0][i]);
 	if(reparray[1]!=NULL) for(i=0; i<nrep; i++) if(reparray[1][i]!=NULL) free(reparray[1][i]);
 	if(reparray[0]!=NULL) free(reparray[0]);
@@ -1986,8 +2179,3 @@ int main ( int argc, char * argv[] ) {
 	if(p_pb!=NULL) free(p_pb);
 	return 0;
 }
-
-
-
-
-
