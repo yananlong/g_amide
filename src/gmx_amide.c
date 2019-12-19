@@ -22,7 +22,7 @@
 #include "index.h"
 #include "smalloc.h"
 #include "vec.h"
-#include "xvgr.h"f
+#include "xvgr.h"
 #include "gstat.h"
 #include "string2.h"
 #include "pbc.h"
